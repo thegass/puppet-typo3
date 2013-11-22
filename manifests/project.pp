@@ -8,10 +8,6 @@
 #   TYPO3 version for project.
 #   Example: '6.1.3'
 #
-# [*typo3_src_path*]
-#   Path to TYPO3 sources.
-#   Example:  '/var/www/'
-#
 # [*site_path*]
 #   Path to project root.
 #   Example:  '/var/www/my-project'
@@ -46,7 +42,6 @@
 define typo3::project (
 
   $version,
-  $typo3_src_path = "",
   $site_path,
   $site_user,
   $site_group,
@@ -56,70 +51,40 @@ define typo3::project (
   $db_host = "",
   $db_name = "",
 
-  $local_conf = [],
   $extensions = [],
+
+  $use_symlink = true
 
 ) {
 
   include typo3
 
-  if ( $site_user != $site_group ) {
-    $dir_permission     = 2770
-    $file_permission    = 660
-  } else {
-    $dir_permission     = 2755
-    $file_permission    = 644
-  }
-
-  unless ( $typo3_src_path ) {
-    $typo3_src_path     = $site_path
-  }
-
   typo3::install::source { "${name}-${version}":
     version => $version,
-    path    => $typo3_src_path,
+    path	=> $site_path,
+    require => File["${site_path}"]
+  }
+  
+  typo3::install::source::files { "${name}-${version}":
+    version => $version,
+    path	=> $site_path,
+	use_symlink => $use_symlink,
+    require => Typo3::Install::Source["${name}-${version}"]
   }
 
   typo3::install::extension { $extensions:
     path    => "${site_path}/typo3conf/ext",
-    owner   => $site_user,
-    group   => $site_group,
+    owner  	=> $site_user,
+    group  	=> $site_group
   }
 
   File {
-    owner   => $site_user,
-    group   => $site_group
+    owner  	=> $site_user,
+    group  	=> $site_group
   }
 
-  file { "${site_path}/typo3_src":
-    ensure  => 'link',
-    target  => "${typo3_src_path}/typo3_src-${version}",
-    force   => true,
-    replace => true,
-    require => Typo3::Install::Source["${name}-${version}"]
-  }
-
-  exec { "ln -s typo3_src/index.php index.php":
-    command => 'ln -s typo3_src/index.php index.php',
-    cwd     => $site_path,
-    require => File["${site_path}/typo3_src"],
-    unless  => 'test -L index.php',
-  }
-
-  unless $version =~ /^6\.2/ {
-    exec { "ln -s typo3_src/t3lib t3lib":
-      command   => 'ln -s typo3_src/t3lib t3lib',
-      cwd       => $site_path,
-      require   => File["${site_path}/typo3_src"],
-      unless    => 'test -L t3lib',
-    }
-  }
-
-  exec { "ln -s typo3_src/typo3 typo3":
-    command => 'ln -s typo3_src/typo3 typo3',
-    cwd     => $site_path,
-    require => File["${site_path}/typo3_src"],
-    unless  => 'test -L typo3',
+  file { "${site_path}":
+    ensure  => "directory"
   }
 
   file {[
@@ -136,7 +101,7 @@ define typo3::project (
     "${site_path}/typo3conf/ext"
   ]:
     ensure  => "directory",
-    mode    => $dir_permission
+    mode	=> 755
   }
 
   file { "${site_path}/typo3conf/extTables.php":
@@ -154,7 +119,7 @@ define typo3::project (
   ]:
     replace => "no",
     ensure  => "present",
-    mode    => $file_permission,
+    mode	=> 644,
     content => template('typo3/.htaccess.erb'),
     require => [
       File["${site_path}/fileadmin"],
@@ -167,35 +132,35 @@ define typo3::project (
   if $version =~ /^4\./ {
 
     file { "${site_path}/typo3conf/localconf.php":
-      replace   => "no",
-      ensure    => "present",
-      content   => template('typo3/localconf.php.erb'),
-      mode      => $file_permission,
-      require   => File["${site_path}/typo3conf"],
+      replace => "no",
+      ensure  => "present",
+      content => template('typo3/localconf.php.erb'),
+      mode    => 644,
+      require => File["${site_path}/typo3conf"],
     }
 
   } elsif $version =~ /^6\./ {
 
     File {
-      replace   => "no",
-      ensure    => "present",
-      mode      => $file_permission
+      replace => "no",
+      ensure  => "present",
+      mode    => 644
     }
 
     file { "${site_path}/typo3conf/LocalConfiguration.php":
-      content   => template('typo3/LocalConfiguration.php.erb'),
+      content => template('typo3/LocalConfiguration.php.erb'),
     }
 
     file { "${site_path}/typo3conf/AdditionalConfiguration.php":
-      content   => template('typo3/AdditionalConfiguration.php.erb'),
+      content => template('typo3/AdditionalConfiguration.php.erb'),
     }
 
     file {[
       "${site_path}/fileadmin/_processed_"
     ]:
-      ensure    => "directory",
-      mode      => $dir_permission,
-      require   => File["${site_path}/fileadmin"]
+      ensure  => "directory",
+      mode	=> 755,
+      require => File["${site_path}/fileadmin"]
     }
 
   }
